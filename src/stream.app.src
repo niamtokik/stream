@@ -1,0 +1,15 @@
+{application, stream,
+ [{description, "Erlang/OTP Stream Library"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {applications,
+   [kernel,
+    stdlib
+   ]},
+  {env,[]},
+  {modules, []},
+  {maintainers, ["Mathieu Kerjouan <contact [at] steepath [dot] eu>"]},
+  {licenses, ["OpenBSD"]},
+  {links, ["https://github.com/niamtokik/stream"]}
+ ]
+}.
