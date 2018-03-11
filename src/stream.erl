@@ -60,18 +60,23 @@
 %%%===================================================================
 -module(stream).
 -behaviour(gen_statem).
+% generic OTP functions
 -export([start/0, start/1, start/2]).
 -export([start_link/0, start_link/1, start_link/2]).
 -export([stop/1]).
+% gen_statem standard function
 -export([callback_mode/0, init/1, code_change/4, terminate/3]).
+% gen_statem states
 -export([bit/3, byte/3, custom/3]).
 -export([handle_cast/2, handle_call/3, handle_info/2]).
+% API
 -export([call/2, call/3, cast/2, info/2]).
--export([cut/2, cut/3]).
--export([input/2]).
--export([copy/2, copy/3]).
--export([map/3, map/4]).
--export([timer/3]).
+-export([cut/2, cut/3, cut/4]).
+-export([input/2, input/3]).
+-export([copy/2, copy/3, copy/4]).
+-export([map/3, map/4, map/5]).
+-export([timer/3, timer/4]).
+
 -include_lib("eunit/include/eunit.hrl").
 -record(state, { buffer = <<>> :: bitstring()
 	       , mode = bit 
@@ -394,7 +399,7 @@ lcut(From, #state{ buffer = Buffer } = Data, Size) ->
 	 , lreply(From, Pattern, cut, [Size])
 	 }
     catch 
-	error:{badmatch, Reason} -> 
+	error:{badmatch, _Reason} -> 
 	    io:format("catch it~n"),
 	    { keep_state
 	    , Data#state{ insufficient = {From, {cut, Size} } } 
@@ -419,7 +424,7 @@ lcut(From, #state{ buffer = Buffer } = Data, Size, Shift) ->
 	 , lreply(From, Pattern, cut, [Size, Shift])
 	 }
     catch 
-	error:{badmatch, Reason} -> 
+	error:{badmatch, _Reason} -> 
 	    io:format("catch it~n"),
 	    { keep_state
 	    , Data#state{ insufficient = {From, {cut, Size, Shift} } } 
@@ -526,6 +531,29 @@ continuator(Pid, copy, [Size, Shift]) ->
 %%====================================================================
 
 %%--------------------------------------------------------------------
+%% @doc local wrapper around gen_statem:call function
+%% @end
+%%--------------------------------------------------------------------
+call(Pid, Event) ->
+    call(Pid, Event, infinity).
+call(Pid, Event, Timeout) ->
+    gen_statem:call(Pid, Event, Timeout).
+
+%%--------------------------------------------------------------------
+%% @doc local wrapper around gen_statem:cast function
+%% @end
+%%--------------------------------------------------------------------
+cast(Pid, Event) ->
+    gen_statem:cast(Pid, Event).
+
+%%--------------------------------------------------------------------
+%% @doc local wrapper around gen_statem:info function
+%% @end
+%%--------------------------------------------------------------------
+info(Pid, Event) ->
+    gen_statem:cast(Pid, Event).
+
+%%--------------------------------------------------------------------
 %% @doc input is a cast and will always return ok except if process
 %%      isn't present.
 %%
@@ -552,6 +580,13 @@ input_0002_test() ->
     {bit, #state{ buffer = Buffer }} = sys:get_state(Pid),
     ?assertEqual(<<"test1234">>, Buffer),
     ok = stop(Pid).
+
+-spec input( Pid :: pid()
+	   , Stream :: bitstring()
+	   , Opts :: term()
+	   ) -> ok.
+input(Pid, Stream, _Opts) ->
+    input(Pid, Stream).
 
 %%--------------------------------------------------------------------
 %% @doc cut alter current buffer stored in infinite stream FSM. This
@@ -626,6 +661,14 @@ cut_1003_test() ->
     ?assertEqual(<<"aaa">>, T),
     ok = stop(Pid).
 
+-spec cut( Pid :: pid()
+	 , Size :: non_neg_integer()
+	 , Shift :: non_neg_integer()
+	 , Opts :: term()
+	 ) -> {bitstring(), function()}.
+cut(Pid, Size, Shift, _Opts) ->
+    cut(Pid, Size, Shift).
+
 %%--------------------------------------------------------------------
 %% @doc copy retrieve a copied value of the current buffer managed
 %%      by infinite stream FSM. Next value is based on the Size*Shift,
@@ -665,6 +708,15 @@ copy_1001_test() ->
     {Out, _Fun} = copy(Pid, 8, 0),
     ?assertEqual(<<"t">>, Out),
     stop(Pid).
+
+-spec copy( Pid :: pid()
+	  , Size :: non_neg_integer()
+	  , Shift :: non_neg_integer()
+	  , Opts :: term() 
+	  ) -> {bitstring(), function()}.
+copy(Pid, Size, Shift, _Opts) ->
+    call(Pid, Size, Shift).
+
 
 %%--------------------------------------------------------------------
 %% @doc map function will copy a value from current buffer and apply
@@ -720,31 +772,9 @@ map_1001_test() ->
 	 , Fun :: function()
 	 , Opts :: term() ) 
 	 -> {bitstring(), function()}.
-map(Pid, Size, Shift, Fun, Opts) ->
+map(Pid, Size, Shift, Fun, _Opts) ->
     call(Pid, {map, Size, Shift, Fun}).
 
-%%--------------------------------------------------------------------
-%% @doc local wrapper around gen_statem:call function
-%% @end
-%%--------------------------------------------------------------------
-call(Pid, Event) ->
-    call(Pid, Event, infinity).
-call(Pid, Event, Timeout) ->
-    gen_statem:call(Pid, Event, Timeout).
-
-%%--------------------------------------------------------------------
-%% @doc local wrapper around gen_statem:cast function
-%% @end
-%%--------------------------------------------------------------------
-cast(Pid, Event) ->
-    gen_statem:cast(Pid, Event).
-
-%%--------------------------------------------------------------------
-%% @doc local wrapper around gen_statem:info function
-%% @end
-%%--------------------------------------------------------------------
-info(Pid, Event) ->
-    gen_statem:cast(Pid, Event).
 
 %%--------------------------------------------------------------------
 %% @doc Run a timer, sending stream at specific time interval.
@@ -761,3 +791,11 @@ info(Pid, Event) ->
 	   -> {ok, {interval, reference()}}.
 timer(Pid, Time, Bitstring) ->
     timer:apply_interval(Time, stream, input, [Pid, Bitstring]).
+
+-spec timer( Pid :: pid()
+	   , Time :: non_neg_integer()
+	   , Stream :: bitstring()
+	   , Opts :: term()
+	   ) -> {ok, {interval, reference()}}.
+timer(Pid, Time, Bitstring, _Opts) ->
+    timer(Pid, Time, Bitstring).
