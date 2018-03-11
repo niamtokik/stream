@@ -400,7 +400,6 @@ lcut(From, #state{ buffer = Buffer } = Data, Size) ->
 	 }
     catch 
 	error:{badmatch, _Reason} -> 
-	    io:format("catch it~n"),
 	    { keep_state
 	    , Data#state{ insufficient = {From, {cut, Size} } } 
 	    }
@@ -425,7 +424,6 @@ lcut(From, #state{ buffer = Buffer } = Data, Size, Shift) ->
 	 }
     catch 
 	error:{badmatch, _Reason} -> 
-	    io:format("catch it~n"),
 	    { keep_state
 	    , Data#state{ insufficient = {From, {cut, Size, Shift} } } 
 	    }
@@ -568,6 +566,7 @@ info(Pid, Event) ->
 	   -> ok.
 input(Pid, Stream) ->
     cast(Pid, {input, Stream}).
+
 input_0001_test() ->
     {ok, Pid} = start_link(),
     input(Pid, <<"test">>),
@@ -587,6 +586,9 @@ input_0002_test() ->
 	   ) -> ok.
 input(Pid, Stream, _Opts) ->
     input(Pid, Stream).
+
+input_1001_test() ->
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc cut alter current buffer stored in infinite stream FSM. This
@@ -646,6 +648,7 @@ cut_0003_test() ->
 	 -> {bitstring(), function()}.
 cut(Pid, Size, Shift) ->
     call(Pid, {cut, Size, Shift}).
+
 cut_1001_test() ->
     {ok, Pid} = start_link(),
     input(Pid, <<"test">>),
@@ -668,6 +671,9 @@ cut_1003_test() ->
 	 ) -> {bitstring(), function()}.
 cut(Pid, Size, Shift, _Opts) ->
     cut(Pid, Size, Shift).
+
+cut_2001_test() ->
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc copy retrieve a copied value of the current buffer managed
@@ -717,6 +723,8 @@ copy_1001_test() ->
 copy(Pid, Size, Shift, _Opts) ->
     call(Pid, Size, Shift).
 
+copy_2001_test() ->
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc map function will copy a value from current buffer and apply
@@ -775,6 +783,8 @@ map_1001_test() ->
 map(Pid, Size, Shift, Fun, _Opts) ->
     call(Pid, {map, Size, Shift, Fun}).
 
+map_2001_test() ->
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc Run a timer, sending stream at specific time interval.
@@ -792,6 +802,9 @@ map(Pid, Size, Shift, Fun, _Opts) ->
 timer(Pid, Time, Bitstring) ->
     timer:apply_interval(Time, stream, input, [Pid, Bitstring]).
 
+timer_0001_test() ->
+    ok.
+
 -spec timer( Pid :: pid()
 	   , Time :: non_neg_integer()
 	   , Stream :: bitstring()
@@ -799,3 +812,6 @@ timer(Pid, Time, Bitstring) ->
 	   ) -> {ok, {interval, reference()}}.
 timer(Pid, Time, Bitstring, _Opts) ->
     timer(Pid, Time, Bitstring).
+
+timer_1001_test() ->
+    ok.
