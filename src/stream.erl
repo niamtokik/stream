@@ -68,6 +68,7 @@
 -export([callback_mode/0, init/1, code_change/4, terminate/3]).
 % gen_statem states
 -export([bit/3, byte/3, custom/3]).
+-export([active/3, passive/3]).
 -export([handle_cast/2, handle_call/3, handle_info/2]).
 % API
 -export([call/2, call/3, cast/2, info/2]).
@@ -79,12 +80,24 @@
 -export([action/2, action/3]).
 
 -include_lib("eunit/include/eunit.hrl").
+-type mode() ::  bit | nybble | byte | wyde | tetra | octa | non_neg_integer().
 -record(state, { buffer = <<>> :: bitstring()
-	       , mode = bit 
+	       , mode = 1 :: integer()
 	       , size = 1
 	       , insufficient = undefined :: term()
 	       , action = #{} :: map()
 	       }).
+
+%%--------------------------------------------------------------------
+%%
+%%--------------------------------------------------------------------
+lsize(bit) -> 1;
+lsize(nybble) -> 4;
+lsize(byte) -> 8;
+lsize(wyde) -> 16;
+lsize(tetra) -> 32;
+lsize(octa) -> 64;
+lsize(Size) when is_integer(Size) andalso  Size >= 0 -> Size.
 
 %%--------------------------------------------------------------------
 %% @doc wrappers around generic start functions.
@@ -199,11 +212,11 @@ init(Args) ->
 -spec mode( Mode :: atom() | {customer, non_neg_integer()}) 
 	  -> {ok, atom(), #state{}}.
 mode(byte) ->
-    {ok, bit, #state{ mode = byte, size = 8}};
+    {ok, bit, #state{ mode = 8, size = 8}};
 mode({custom, Size}) ->
-    {ok, custom, #state{ mode = custom, size = Size}};
+    {ok, custom, #state{ mode = lsize(Size), size = Size}};
 mode(_) ->
-    {ok, bit, #state{ mode = bit, size = 1 }}.
+    {ok, bit, #state{ mode = 1, size = 1 }}.
 
 %%--------------------------------------------------------------------
 %% @doc code_change callback. Currently not supported.
@@ -218,6 +231,63 @@ code_change(_,_,_,_) ->
 %%--------------------------------------------------------------------
 terminate(_,_,_) ->
     ok.
+
+%%--------------------------------------------------------------------
+%%
+%%--------------------------------------------------------------------
+active(cast, Event, Data) ->
+    handle_cast(Event, Data);
+
+active({call, _From}, split, Data) ->
+    {keep_state, Data};
+active({call, _From}, {split, _Shift}, Data) ->
+    {keep_state, Data};
+active({call, From}, {map, Size, Function}, Data) ->
+    lmap(From, Data, Size, Function);
+active({call, From}, {map, Size, Shift, Function}, Data) ->
+    lmap(From, Data, Size, Shift, Function);
+active({call, From}, {copy, Size}, Data) ->
+    lcopy(From, Data, Size);
+active({call, From}, {copy, Size, Shift}, Data) ->
+    lcopy(From, Data, Size, Shift);
+active({call, From}, {cut, Size}, Data ) ->
+    lcut(From, Data, Size);
+active({call, From}, {cut, Size, Shift}, Data) ->
+    lcut(From, Data, Size, Shift);
+active({call, From}, Event, Data) ->
+    handle_call(From, Event, Data);
+
+active(_Method, _Event, Data) ->
+    {keep_state, Data}.
+
+%%--------------------------------------------------------------------
+%%
+%%--------------------------------------------------------------------
+passive(cast, Event, Data) ->
+    handle_cast(Event, Data);
+
+passive({call, _From}, split, Data) ->
+    {keep_state, Data};
+passive({call, _From}, {split, _Shift}, Data) ->
+    {keep_state, Data};
+passive({call, From}, {map, Size, Function}, Data) ->
+    lmap(From, Data, Size, Function);
+passive({call, From}, {map, Size, Shift, Function}, Data) ->
+    lmap(From, Data, Size, Shift, Function);
+passive({call, From}, {copy, Size}, Data) ->
+    lcopy(From, Data, Size);
+passive({call, From}, {copy, Size, Shift}, Data) ->
+    lcopy(From, Data, Size, Shift);
+passive({call, From}, {cut, Size}, Data ) ->
+    lcut(From, Data, Size);
+passive({call, From}, {cut, Size, Shift}, Data) ->
+    lcut(From, Data, Size, Shift);
+passive({call, From}, Event, Data) ->
+    handle_call(From, Event, Data);
+
+passive(_Method, _Event, Data) ->
+    {keep_state, Data}.
+
 
 %%--------------------------------------------------------------------
 %% @doc bit state is the main state of stream process. 
@@ -300,6 +370,10 @@ custom(_Method, _Event, Data) ->
 %% @doc common cast shared across states.
 %% @end
 %%--------------------------------------------------------------------
+handle_cast( {set, mode, Size }, Data) ->
+    { keep_state
+    , Data#state{ mode = lsize(Size) }
+    };
 % if we don't have enough data, insufficient is set and 
 % contain the function and the caller. We can update our stream on
 % demand and check when its good.
@@ -414,17 +488,18 @@ linput(#state{ buffer = Buffer } = Data, Input) ->
 	  , Size :: non_neg_integer()) 
 	  -> Reply :: lreply() |
 		      lerror().
-lcut(From, #state{ buffer = Buffer } = Data, Size) ->
-    try <<Pattern:Size/bitstring, Rest/bitstring>> = Buffer,
+lcut(From, #state{ buffer = Buffer, mode = Mode } = Data, Size) ->
+    S = Mode*Size,
+    try <<Pattern:S/bitstring, Rest/bitstring>> = Buffer,
 	 { keep_state
 	 , Data#state{ buffer = Rest
 		     , insufficient = undefined }
-	 , lreply(From, Pattern, cut, [Size])
+	 , lreply(From, Pattern, cut, [S])
 	 }
     catch 
 	error:{badmatch, _Reason} -> 
 	    { keep_state
-	    , Data#state{ insufficient = {From, {cut, Size} } } 
+	    , Data#state{ insufficient = {From, {cut, S} } } 
 	    }
     end.
 
@@ -438,17 +513,19 @@ lcut(From, #state{ buffer = Buffer } = Data, Size) ->
 	  , Shift :: non_neg_integer()
 	  ) -> Reply :: lreply() |
 		      lerror().
-lcut(From, #state{ buffer = Buffer } = Data, Size, Shift) ->
-    try <<Head:Shift/bitstring, Pattern:Size/bitstring, Rest/bitstring>> = Buffer,
+lcut(From, #state{ buffer = Buffer, mode = Mode } = Data, Size, Shift) ->
+    PS = Mode*Size,
+    SS = Mode*Shift,
+    try <<Head:SS/bitstring, Pattern:PS/bitstring, Rest/bitstring>> = Buffer,
 	 { keep_state
 	 , Data#state{ buffer = <<Head/bitstring, Rest/bitstring>> 
 		     , insufficient = undefined }
-	 , lreply(From, Pattern, cut, [Size, Shift])
+	 , lreply(From, Pattern, cut, [PS, SS])
 	 }
     catch 
 	error:{badmatch, _Reason} -> 
 	    { keep_state
-	    , Data#state{ insufficient = {From, {cut, Size, Shift} } } 
+	    , Data#state{ insufficient = {From, {cut, PS, SS} } } 
 	    }
     end.
 
@@ -475,14 +552,19 @@ lcopy(From, Data, Size) ->
 	   , Shift :: non_neg_integer()) 
 	   -> Reply :: lreply() |
 		       lerror().
-lcopy(From, #state{ buffer = Buffer } = Data, Size, Shift) ->
-    try <<_:Shift/bitstring, Head:Size/bitstring, _/bitstring>> = Buffer,
+lcopy(From, #state{ buffer = Buffer, mode = Mode } = Data, Size, Shift) ->
+    PS = Size*Mode,
+    SS = Shift*Mode,
+    try <<_:SS/bitstring, Head:PS/bitstring, _/bitstring>> = Buffer,
 	 { keep_state
 	 , Data
-	 , lreply(From, Head, copy, [Size, Shift+Size])
+	 , lreply(From, Head, copy, [PS, SS+PS])
 	 }
     catch 
-	error:{badmatch, Reason} -> lerror(Data, From, Reason)
+	error:{badmatch,_Reason} -> 
+	    { keep_state
+	    , Data#state{ insufficient = {From, {copy, PS, SS+PS} } }
+	    }
     end.
 
 %%--------------------------------------------------------------------
@@ -511,14 +593,19 @@ lmap(From, Data, Size, Fun) ->
 	  , Fun :: function())
 	  -> Reply :: lreply() |
 		      lerror().
-lmap(From, #state{ buffer = Buffer } = Data, Size, Shift, Fun) ->
-    try <<_:Shift, Head:Size/bitstring, _/bitstring>> = Buffer,
+lmap(From, #state{ buffer = Buffer, mode = Mode } = Data, Size, Shift, Fun) ->
+    PS = Size*Mode,
+    SS = Shift*Mode,
+    try <<_:SS, Head:PS/bitstring, _/bitstring>> = Buffer,
 	 { keep_state
 	 , Data
-	 , lreply(From, Fun(Head), map, [Size, Shift+Size, Fun])
+	 , lreply(From, Fun(Head), map, [PS, SS+PS, Fun])
 	 }
     catch
-	error:{badmatch,Reason} -> lerror(Data, From, Reason)
+	error:{badmatch,Reason} ->
+	    { keep_state
+	    , Data#state{ insufficient = {From, {lmap, PS, SS+PS, Fun} } }
+	    }
     end.
 
 %%--------------------------------------------------------------------
