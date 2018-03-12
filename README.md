@@ -1,6 +1,10 @@
 # stream
 
-`stream` is an Erlang/OTP library.
+`stream`  is   an  Erlang/OTP  library   implementing  infinite-stream
+data-structure  based   on  bitstring.  This  library   give  you  the
+possibility  to  cut,  copy,  act  and   react  on  any  kind  of  raw
+bitstrings. This implementation is currently in active development and
+should not be used in production.
 
 ## Build
 
@@ -27,7 +31,7 @@ read them.
 
 ## Usage
 
-stream use edoc module, all functions are self documented. Here a
+`stream` use  edoc module, all  functions are self documented.  Here a
 simple usage example of this library:
 
     > {ok, Stream} = stream:start.
@@ -45,7 +49,12 @@ simple usage example of this library:
 
 ## Backup
 
-`stream` will be available soon on gitlab and bitbucket as backup.
+`stream` is available on different place on the web:
+
+ * bitbucket: https://bitbucket.org/niamtokik/stream
+ * gitlab: https://gitlab.com/niamtokik/stream
+ 
+These repositories are not automatically synced.
 
 ## License
 
