@@ -76,12 +76,14 @@
 -export([copy/2, copy/3, copy/4]).
 -export([map/3, map/4, map/5]).
 -export([timer/3, timer/4]).
+-export([action/2, action/3]).
 
 -include_lib("eunit/include/eunit.hrl").
 -record(state, { buffer = <<>> :: bitstring()
 	       , mode = bit 
 	       , size = 1
 	       , insufficient = undefined :: term()
+	       , action = #{} :: map()
 	       }).
 
 %%--------------------------------------------------------------------
@@ -255,6 +257,12 @@ bit(cast, {mode, byte}, Data) ->
     {next_state, byte, Data#state{ size = 8 }};
 bit(cast, {mode, custom, Size}, Data) ->
     {next_state, custom, Data#state{ size = Size }};
+
+bit(cast, {action, Pattern, Function}, Data) ->
+    handle_cast({action, Pattern, Function}, Data);
+bit(cast, {action, Pattern, Function, Opts}, Data) ->
+    handle_cast({action, Pattern, Function, Opts}, Data);
+
 bit(_Method, _Event, Data) ->
     {keep_state, Data}.
 
@@ -311,6 +319,10 @@ handle_cast({input, Stream}, Data) ->
     linput(Data, Stream);
 handle_cast({input, Stream, _Opts}, Data) ->
     linput(Data, Stream);
+handle_cast({action, Pattern, Function}, Data) ->
+    laction(Data, Pattern, Function);
+handle_cast({action, Pattern, Function, Opts}, Data) ->
+    laction(Data, Pattern, Function, Opts);
 handle_cast(_Event, Data) ->
     {keep_state, Data}.
 
@@ -376,6 +388,17 @@ lreply(From, Head, Function, Args) ->
 -spec linput( Data :: #state{}
 	    , Input :: bitstring()) 
 	    -> {keep_state, #state{}}.
+linput(#state{ buffer = Buffer, action = Actions } = Data, Input) 
+  when Actions =/= #{} ->
+    Action = maps:get(Input, Actions, undefined),
+    _ = case Action of
+	    Function 
+	      when is_function(Function) -> Function();
+	    undefined -> ok
+	end,
+    { keep_state
+    , Data#state{ buffer = <<Buffer/bitstring, Input/bitstring>> }
+    };
 linput(#state{ buffer = Buffer } = Data, Input) ->
     { keep_state
     , Data#state{ buffer = <<Buffer/bitstring, Input/bitstring>> }
@@ -498,6 +521,28 @@ lmap(From, #state{ buffer = Buffer } = Data, Size, Shift, Fun) ->
 	error:{badmatch,Reason} -> lerror(Data, From, Reason)
     end.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% @end
+%%--------------------------------------------------------------------
+-spec laction( #state{}
+	     , Pattern :: bitstring()
+	     , Function :: function()
+	     ) -> {keep_state, #state{}}.
+laction(#state{ action = Actions } = Data, Pattern, Function) ->
+    { keep_state
+    , Data#state{ action = maps:put(Pattern, Function, Actions) } 
+    }.
+
+-spec laction( #state{}
+	     , Pattern :: bitstring()
+	     , Function :: function()
+	     , Opts :: term()
+	     ) -> {keep_state, #state{}}.
+laction(#state{ action = Actions } = Data, Pattern, Function, _Opts) ->
+    { keep_state
+    , Data#state{ action = maps:put(Pattern, Function, Actions) }
+    }.
 
 %%--------------------------------------------------------------------
 %% @doc continuator function is an helper function to generate
@@ -814,4 +859,41 @@ timer(Pid, Time, Bitstring, _Opts) ->
     timer(Pid, Time, Bitstring).
 
 timer_1001_test() ->
+    ok.
+
+%%--------------------------------------------------------------------
+%% @doc This function react on received stream. 
+%%      
+%%      ``` action(Pid, <<"mypattern">>, fun() -> logic end).
+%%      ```
+%% @end
+%%--------------------------------------------------------------------
+-spec action( Pid :: pid()
+	    , { Pattern :: bitstring()
+	      , Function :: function() }
+	    ) -> ok.
+action(Pid, {Pattern, Function}) ->
+    cast(Pid, {action, Pattern, Function}).
+
+action_0001_test() ->
+    {ok, Pid} = start(),
+    Ret = self(),
+    action( Pid, { <<"abracadabra">>
+		 , fun F() -> Ret ! <<"found it!">> end 
+		 }),
+    input(Pid, <<"abracadabra">>),
+    Out = receive 
+	     <<"found it!">> -> ok 
+	 end,
+    ?assertEqual(Out, ok).
+
+-spec action( Pid :: pid()
+	    , { Pattern :: bitstring()
+	      , Function :: function() }
+	    , Opts :: term() 
+	    ) -> ok.
+action(Pid, {Pattern, Function}, _Opts) ->
+    cast(Pid, {action, Pattern, Function, _Opts}).
+
+action_1001_test() ->
     ok.
