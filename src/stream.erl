@@ -2,7 +2,6 @@
 %%% @author Mathieu Kerjouan
 %%% @copyright 2018, Mathieu Kerjouan <contact [at] steepath [dot] eu>
 %%% @version 0.1.0
-%%% @title Infinite Bitstring Stream State Machine
 %%% @doc = Introduction =
 %%%
 %%%      This code was mainly created to solve a problem of high
@@ -56,6 +55,7 @@
 %%%
 %%%      ``` ok = stream:stop(Pid).
 %%%      ```
+%%%
 %%% @end
 %%%===================================================================
 -module(stream).
