@@ -10,6 +10,8 @@
   {modules, []},
   {maintainers, ["Mathieu Kerjouan <contact [at] steepath [dot] eu>"]},
   {licenses, ["OpenBSD"]},
-  {links, #{ github => "https://github.com/niamtokik/stream"}}
+  {links, [{"github", "https://github.com/niamtokik/stream"}
+          ,{"gitlab", "https://gitlab.com/niamtokik/stream"}
+          ,{"bitbucket", "https://bitbucket.org/niamtokik/stream/src"}]}
  ]
 }.
