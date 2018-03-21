@@ -204,25 +204,48 @@ copy_0002_test() ->
 	 , From :: pid()
 	 , { Size :: non_neg_integer()
 	   , Shift :: non_neg_integer()
-	   , Function :: function() }
-	 ) -> {keep_state, #state{}}.
-map(Data, From, {Size, Shift, Function}) -> 
-    ok.
+	   , Function :: function()
+	   , Opts :: term() }
+	 ) -> { keep_state
+	      , #state{}
+	      , [{reply, pid(), {term(), function()}}]}.
+
+map(Data, From, {Size, Shift, Function}) ->
+    map(Data, From, {Size, Shift, Function, [{mode, cut}]});
+map(Data, From, {Size, Shift, Function, Opts}) ->
+    Mode = proplists:get_value(mode, Opts, cut),
+    map(Mode, Data, From, {Size, Shift, Function, Opts}).
 
 map_0000_test() ->
     ok.
 
--spec map( Data :: #state{}
+%%--------------------------------------------------------------------
+%% @doc
+%% @end
+%%--------------------------------------------------------------------
+-spec map( Mode :: copy | cut 
+	 , Data :: #state{}
 	 , From :: pid()
 	 , { Size :: non_neg_integer()
 	   , Shift :: non_neg_integer()
 	   , Function :: function() }
-	 , Opts :: term()
-	 ) -> {keep_state, #state{}}.
-map(Data, From, {Size, Shift, Function}, Opts) ->
+	 ) -> { keep_state
+	      , #state{}
+	      , [{reply, pid(), {term(), function()}}]}.
+
+map(cut, Data, From, {Size, Shift, Function}) ->
+    map(cut, Data, From, {Size, Shift, Function, []});
+map(cut, Data, From, {Size, Shift, Function, Opts}) ->
+    ok;
+map(copy, Data, From, {Size, Shift, Function}) ->
+    map(copy, Data, From, {Size, Shift, Function, []});
+map(copy, Data, From, {Size, Shift, Function, Opts}) ->
     ok.
 
-map_1000_test() ->
+map_cut_0000_test() ->
+    ok.
+
+map_copy_0000_test() ->
     ok.
 
 %%--------------------------------------------------------------------
@@ -234,7 +257,9 @@ map_1000_test() ->
 	    , { Size :: non_neg_integer()
 	      , Shift :: non_neg_integer()
 	      , Pattern :: bitstring() | function() }
-	    ) -> {keep_state, #state{}}.
+	    ) -> { keep_state
+		 , #state{} 
+		 , Reference :: term() }.
 filter(Data, From, {Size, Shift, Pattern}) -> 
     ok.
 
@@ -263,26 +288,29 @@ filter_1000_test() ->
 	    , { Size :: non_neg_integer()
 	      , Shift :: non_neg_integer()
 	      , Pattern :: bitstring()
-	      , Function :: function() }
-	    ) -> {keep_state, #state{}}.
-action(Data, From, {Size, Shift, Pattern, Function}) -> 
+	      , Function :: function() 
+	      , Opts :: term() }
+	    ) -> {keep_state
+		 , #state{}
+		 , [{reply, pid(), {pid(), Reference ::term()}}]
+		 }.
+action(Data, From, {Size, Shift, Pattern, Function}) ->
+    ok;
+action(Data, From, {Size, Shift, Pattern, Function, Opts}) -> 
     ok.
 
 action_0000_test() ->
     ok.
 
--spec action( Data :: #state{}
-	    , From :: pid()
-	    , { Size :: non_neg_integer()
-	      , Shift :: non_neg_integer()
-	      , Pattern :: bitstring()
-	      , Function :: function() }
-	    , Opts :: term()
-	    ) -> {keep_state, #state{}}.
-action(Data, From, {Size, Shift, Pattern, Function}, Opts) ->
+action(cut, Data, From, {Size, Shift, Pattern, Function}) ->
+    ok;
+action(copy, Data, From, {Size, Shift, Pattern, Function}) ->
     ok.
 
-action_1000_test() ->
+action_cut_0000_test() ->
+    ok.
+
+action_copy_0000_test() ->
     ok.
 
 %%--------------------------------------------------------------------
@@ -321,14 +349,33 @@ parse_1000_test() ->
 %% @doc
 %% @end
 %%--------------------------------------------------------------------
-continuator(StreamID, Function, Arguments) -> 
-    ok.
+% stream:Function({Size, Shift, Arguments, Opts}).
+continuator(#state{ mode = Mode }, Pid, map, {Size, Shift, Function}) -> 
+    fun() -> 
+	    stream:map(Pid, Size, Shift, Function)
+    end;
+continuator(#state{ mode = Mode }, Pid, map, {Size, Shift, Function, Opts}) -> 
+    fun(Args) ->
+	    stream:map(Pid, Size, Shift, Function, [Args|Opts])
+    end;
+continuator(Data, Pid, cut, {Size, Shift}) -> 
+    fun() ->
+	    stream:cut(Pid, Size, Shift)
+    end;
+continuator(Data, Pid, cut, {Size, Shift, Opts}) -> 
+    fun(Args) ->
+	    stream:cut(Pid, Size, Shift, [Args|Opts])
+    end;
+continuator(Data, Pid, copy, {Size, Shift}) -> 
+    fun() ->
+	    stream:copy(Pid, Size, Shift)
+    end;
+continuator(Data, Pid, copy, {Size, Shift, Opts}) -> 
+    fun(Args) ->
+	    stream:copy(Pid, Size, Shift, [Args|Opts])
+    end.
+	    
+    
+	    
+		  
 
-continuator_0000_test() ->
-    ok.
-
-continuator(StreamID, Function, Arguments, Opts) -> 
-    ok.
-
-continuator_1000_test() ->
-    ok.
