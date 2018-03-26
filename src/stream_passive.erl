@@ -17,7 +17,7 @@
 %% @end
 %%--------------------------------------------------------------------
 callback_mode() ->
-    state_functions.
+    handle_event_function.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -37,11 +37,11 @@ terminate(_,_,_) ->
 %% @doc
 %% @end
 %%--------------------------------------------------------------------
-passive(cast, Event, Data) ->
+handle_event(cast, Event, _, Data) ->
     handle_cast(Event, Data);
-passive({call, From}, Event, Data) ->
+handle_event({call, From}, Event, _, Data) ->
     handle_call(From, Event, Data);
-passive(info, Event, Data) ->
+handle_event(info, Event, _, Data) ->
     handle_info(Event, Data).
 
 %%--------------------------------------------------------------------

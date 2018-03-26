@@ -368,14 +368,9 @@ continuator(Data, Pid, cut, {Size, Shift, Opts}) ->
     end;
 continuator(Data, Pid, copy, {Size, Shift}) -> 
     fun() ->
-	    stream:copy(Pid, Size, Shift)
+	    stream:copy(Pid, Size, Shift+Size)
     end;
 continuator(Data, Pid, copy, {Size, Shift, Opts}) -> 
     fun(Args) ->
-	    stream:copy(Pid, Size, Shift, [Args|Opts])
+	    stream:copy(Pid, Size, Shift+Size, [Args|Opts])
     end.
-	    
-    
-	    
-		  
-
