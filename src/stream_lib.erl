@@ -65,7 +65,7 @@
 -export([input/2]).
 -export([cut/3]).
 -export([copy/3]).
-%-export([map/3, map/4]).
+-export([map/3]).
 %-export([filter/3, filter/4]).
 %-export([action/3, action/4]).
 %-export([search/3, search/4]).
